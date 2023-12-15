@@ -1,0 +1,2 @@
+make git-diff before=src/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol after=src/UpdatedLendingPoolLiquidationManager.sol out=LendingPoolLiquidationManager
+make git-diff before=src/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol after=src/UpdatedLendingPool.sol out=LendingPool
