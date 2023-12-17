@@ -1,6 +1,6 @@
 ```diff
 diff --git a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol b/src/contracts/UpdatedLendingPool.sol
-index 60f0e43..27782a1 100644
+index 60f0e43..42b4188 100644
 --- a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol
 +++ b/src/contracts/UpdatedLendingPool.sol
 @@ -3448,7 +3448,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
@@ -12,55 +12,33 @@ index 60f0e43..27782a1 100644
  
    function getRevision() internal pure returns (uint256) {
      return LENDINGPOOL_REVISION;
-@@ -3989,6 +3989,47 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
-     }
-   }
+@@ -3956,15 +3956,13 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+    * @param _reserve the address of the principal reserve
+    * @param _user the address of the borrower
+    * @param _purchaseAmount the amount of principal that the liquidator wants to repay
+-   * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
+-   * he wants to receive the underlying asset directly
+    **/
+   function liquidationCall(
+     address _collateral,
+     address _reserve,
+     address _user,
+     uint256 _purchaseAmount,
+-    bool _receiveAToken
++    bool
+   ) external payable nonReentrant onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {
+     address liquidationManager = addressesProvider.getLendingPoolLiquidationManager();
  
-+  /**
-+   * @dev This method behaves analog to a liquidationCall with some key differences:
-+   * - the lb is fixed to 1%
-+   * - you can liquidate healthy(collateralized) positions
-+   * - you can liquidate up to 100%
-+   * - you can only liquidate the underlying
-+   * @dev users can invoke this function to liquidate an collateralized & undercollateralized position.
-+   * @param _reserve the address of the collateral to liquidated
-+   * @param _reserve the address of the principal reserve
-+   * @param _user the address of the borrower
-+   * @param _purchaseAmount the amount of principal that the liquidator wants to repay
-+   * he wants to receive the underlying asset directly
-+   **/
-+  function offboardingLiquidationCall(
-+    address _collateral,
-+    address _reserve,
-+    address _user,
-+    uint256 _purchaseAmount
-+  ) external payable nonReentrant onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {
-+    address liquidationManager = addressesProvider.getLendingPoolLiquidationManager();
-+
-+    //solium-disable-next-line
-+    (bool success, bytes memory result) = liquidationManager.delegatecall(
-+      abi.encodeWithSignature(
-+        'offboardingLiquidationCall(address,address,address,uint256)',
-+        _collateral,
-+        _reserve,
-+        _user,
-+        _purchaseAmount
-+      )
-+    );
-+    require(success, 'Liquidation call failed');
-+
-+    (uint256 returnCode, string memory returnMessage) = abi.decode(result, (uint256, string));
-+
-+    if (returnCode != 0) {
-+      //error found
-+      revert(string(abi.encodePacked('Liquidation failed: ', returnMessage)));
-+    }
-+  }
-+
-   /**
-    * @dev allows smartcontracts to access the liquidity of the pool within one transaction,
-    * as long as the amount taken plus a fee is returned. NOTE There are security concerns for developers of flashloan receiver contracts
-@@ -4003,6 +4044,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -3976,7 +3974,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+         _reserve,
+         _user,
+         _purchaseAmount,
+-        _receiveAToken
++        false
+       )
+     );
+     require(success, 'Liquidation call failed');
+@@ -4003,6 +4001,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      uint256 _amount,
      bytes memory _params
    ) public nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {

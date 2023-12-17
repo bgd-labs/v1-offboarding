@@ -94,7 +94,7 @@ contract UpgradeTest is Test {
     address debt;
   }
 
-  function test_liquidate() public {
+  function test_healthyLiquidateShouldUse100bpsLB() public {
     V1User[] memory users = new V1User[](1);
     users[0] = V1User(
       0x1F0aeAeE69468727BA258B0cf692E6bfecc2E286,
@@ -103,19 +103,16 @@ contract UpgradeTest is Test {
     );
     for (uint256 i = 0; i < users.length; i++) {
       deal(users[i].debt, address(this), 26936742563757401924489);
-      // as these are healthy users "default liquidation" should revert
-      vm.expectRevert('Liquidation failed: Health factor is not below the threshold');
-      pool.liquidationCall(users[i].collateral, users[i].debt, users[i].user, 1e6, false);
-
       // offboarding liquidations should provide a fixed 1% bonus
       (, uint256 totalCollateralETHBefore, uint256 totalBorrowsETHBefore, , , , , ) = pool
         .getUserAccountData(users[i].user);
       IERC20(users[i].debt).approve(provider.getLendingPoolCore(), type(uint256).max);
-      pool.offboardingLiquidationCall(
+      pool.liquidationCall(
         users[i].collateral,
         users[i].debt,
         users[i].user,
-        type(uint256).max
+        type(uint256).max,
+        false
       );
       (, uint256 totalCollateralETHAfter, uint256 totalBorrowsETHAfter, , , , , ) = pool
         .getUserAccountData(users[i].user);

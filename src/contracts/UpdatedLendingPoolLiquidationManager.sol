@@ -5870,7 +5870,6 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   IFeeProvider feeProvider;
   address ethereumAddress;
 
-  uint256 constant LIQUIDATION_CLOSE_FACTOR_PERCENT = 50;
   uint256 constant OFFBOARDING_LIQUIDATION_BONUS = 101; // 1%
 
   /**
@@ -5950,23 +5949,19 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   }
 
   /**
-   * @dev This method behaves analog to a liquidationCall with some key differences:
-   * - the lb is fixed to 1%
-   * - you can liquidate healthy(collateralized) addresses
-   * - you can liquidate up to 100%
-   * - you can only liquidate the underlying
-   * @dev users can invoke this function to liquidate a collateralized or undercollateralized position.
+   * @dev users can invoke this function to liquidate an any collateral position.
    * @param _reserve the address of the collateral to liquidated
    * @param _reserve the address of the principal reserve
    * @param _user the address of the borrower
    * @param _purchaseAmount the amount of principal that the liquidator wants to repay
    * he wants to receive the underlying asset directly
    **/
-  function offboardingLiquidationCall(
+  function liquidationCall(
     address _collateral,
     address _reserve,
     address _user,
-    uint256 _purchaseAmount
+    uint256 _purchaseAmount,
+    bool
   ) external payable returns (uint256, string memory) {
     // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
     LiquidationCallLocalVars memory vars;
@@ -6015,10 +6010,15 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
       ? vars.maxPrincipalAmountToLiquidate
       : _purchaseAmount;
 
-    (
-      uint256 maxCollateralToLiquidate,
-      uint256 principalAmountNeeded
-    ) = offboardingCalculateAvailableCollateralToLiquidate(
+    (uint256 maxCollateralToLiquidate, uint256 principalAmountNeeded) = !vars
+      .healthFactorBelowThreshold
+      ? offboardingCalculateAvailableCollateralToLiquidate(
+        _collateral,
+        _reserve,
+        vars.actualAmountToLiquidate,
+        vars.userCollateralBalance
+      )
+      : calculateAvailableCollateralToLiquidate(
         _collateral,
         _reserve,
         vars.actualAmountToLiquidate,
@@ -6029,15 +6029,19 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
 
     //if there is a fee to liquidate, calculate the maximum amount of fee that can be liquidated
     if (vars.originationFee > 0) {
-      (
-        vars.liquidatedCollateralForFee,
-        vars.feeLiquidated
-      ) = offboardingCalculateAvailableCollateralToLiquidate(
-        _collateral,
-        _reserve,
-        vars.originationFee,
-        vars.userCollateralBalance.sub(maxCollateralToLiquidate)
-      );
+      (vars.liquidatedCollateralForFee, vars.feeLiquidated) = !vars.healthFactorBelowThreshold
+        ? offboardingCalculateAvailableCollateralToLiquidate(
+          _collateral,
+          _reserve,
+          vars.originationFee,
+          vars.userCollateralBalance.sub(maxCollateralToLiquidate)
+        )
+        : calculateAvailableCollateralToLiquidate(
+          _collateral,
+          _reserve,
+          vars.originationFee,
+          vars.userCollateralBalance.sub(maxCollateralToLiquidate)
+        );
     }
 
     //if principalAmountNeeded < vars.ActualAmountToLiquidate, there isn't enough
@@ -6071,6 +6075,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
 
     AToken collateralAtoken = AToken(core.getReserveATokenAddress(_collateral));
 
+    //otherwise receives the underlying asset
     //burn the equivalent amount of atoken
     collateralAtoken.burnOnLiquidation(_user, maxCollateralToLiquidate);
     core.transferToUser(_collateral, msg.sender, maxCollateralToLiquidate);
@@ -6109,188 +6114,6 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
       vars.borrowBalanceIncrease,
       msg.sender,
       false,
-      //solium-disable-next-line
-      block.timestamp
-    );
-
-    return (uint256(LiquidationErrors.NO_ERROR), 'No errors');
-  }
-
-  /**
-   * @dev users can invoke this function to liquidate an undercollateralized position.
-   * @param _reserve the address of the collateral to liquidated
-   * @param _reserve the address of the principal reserve
-   * @param _user the address of the borrower
-   * @param _purchaseAmount the amount of principal that the liquidator wants to repay
-   * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
-   * he wants to receive the underlying asset directly
-   **/
-  function liquidationCall(
-    address _collateral,
-    address _reserve,
-    address _user,
-    uint256 _purchaseAmount,
-    bool _receiveAToken
-  ) external payable returns (uint256, string memory) {
-    // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
-    LiquidationCallLocalVars memory vars;
-
-    (, , , , , , , vars.healthFactorBelowThreshold) = dataProvider.calculateUserGlobalData(_user);
-
-    if (!vars.healthFactorBelowThreshold) {
-      return (
-        uint256(LiquidationErrors.HEALTH_FACTOR_ABOVE_THRESHOLD),
-        'Health factor is not below the threshold'
-      );
-    }
-
-    vars.userCollateralBalance = core.getUserUnderlyingAssetBalance(_collateral, _user);
-
-    //if _user hasn't deposited this specific collateral, nothing can be liquidated
-    if (vars.userCollateralBalance == 0) {
-      return (
-        uint256(LiquidationErrors.NO_COLLATERAL_AVAILABLE),
-        'Invalid collateral to liquidate'
-      );
-    }
-
-    vars.isCollateralEnabled =
-      core.isReserveUsageAsCollateralEnabled(_collateral) &&
-      core.isUserUseReserveAsCollateralEnabled(_collateral, _user);
-
-    //if _collateral isn't enabled as collateral by _user, it cannot be liquidated
-    if (!vars.isCollateralEnabled) {
-      return (
-        uint256(LiquidationErrors.COLLATERAL_CANNOT_BE_LIQUIDATED),
-        'The collateral chosen cannot be liquidated'
-      );
-    }
-
-    //if the user hasn't borrowed the specific currency defined by _reserve, it cannot be liquidated
-    (, vars.userCompoundedBorrowBalance, vars.borrowBalanceIncrease) = core.getUserBorrowBalances(
-      _reserve,
-      _user
-    );
-
-    if (vars.userCompoundedBorrowBalance == 0) {
-      return (
-        uint256(LiquidationErrors.CURRRENCY_NOT_BORROWED),
-        'User did not borrow the specified currency'
-      );
-    }
-
-    //all clear - calculate the max principal amount that can be liquidated
-    vars.maxPrincipalAmountToLiquidate = vars
-      .userCompoundedBorrowBalance
-      .mul(LIQUIDATION_CLOSE_FACTOR_PERCENT)
-      .div(100);
-
-    vars.actualAmountToLiquidate = _purchaseAmount > vars.maxPrincipalAmountToLiquidate
-      ? vars.maxPrincipalAmountToLiquidate
-      : _purchaseAmount;
-
-    (
-      uint256 maxCollateralToLiquidate,
-      uint256 principalAmountNeeded
-    ) = calculateAvailableCollateralToLiquidate(
-        _collateral,
-        _reserve,
-        vars.actualAmountToLiquidate,
-        vars.userCollateralBalance
-      );
-
-    vars.originationFee = core.getUserOriginationFee(_reserve, _user);
-
-    //if there is a fee to liquidate, calculate the maximum amount of fee that can be liquidated
-    if (vars.originationFee > 0) {
-      (
-        vars.liquidatedCollateralForFee,
-        vars.feeLiquidated
-      ) = calculateAvailableCollateralToLiquidate(
-        _collateral,
-        _reserve,
-        vars.originationFee,
-        vars.userCollateralBalance.sub(maxCollateralToLiquidate)
-      );
-    }
-
-    //if principalAmountNeeded < vars.ActualAmountToLiquidate, there isn't enough
-    //of _collateral to cover the actual amount that is being liquidated, hence we liquidate
-    //a smaller amount
-
-    if (principalAmountNeeded < vars.actualAmountToLiquidate) {
-      vars.actualAmountToLiquidate = principalAmountNeeded;
-    }
-
-    //if liquidator reclaims the underlying asset, we make sure there is enough available collateral in the reserve
-    if (!_receiveAToken) {
-      uint256 currentAvailableCollateral = core.getReserveAvailableLiquidity(_collateral);
-      if (currentAvailableCollateral < maxCollateralToLiquidate) {
-        return (
-          uint256(LiquidationErrors.NOT_ENOUGH_LIQUIDITY),
-          "There isn't enough liquidity available to liquidate"
-        );
-      }
-    }
-
-    core.updateStateOnLiquidation(
-      _reserve,
-      _collateral,
-      _user,
-      vars.actualAmountToLiquidate,
-      maxCollateralToLiquidate,
-      vars.feeLiquidated,
-      vars.liquidatedCollateralForFee,
-      vars.borrowBalanceIncrease,
-      _receiveAToken
-    );
-
-    AToken collateralAtoken = AToken(core.getReserveATokenAddress(_collateral));
-
-    //if liquidator reclaims the aToken, he receives the equivalent atoken amount
-    if (_receiveAToken) {
-      collateralAtoken.transferOnLiquidation(_user, msg.sender, maxCollateralToLiquidate);
-    } else {
-      //otherwise receives the underlying asset
-      //burn the equivalent amount of atoken
-      collateralAtoken.burnOnLiquidation(_user, maxCollateralToLiquidate);
-      core.transferToUser(_collateral, msg.sender, maxCollateralToLiquidate);
-    }
-
-    //transfers the principal currency to the pool
-    core.transferToReserve.value(msg.value)(_reserve, msg.sender, vars.actualAmountToLiquidate);
-
-    if (vars.feeLiquidated > 0) {
-      //if there is enough collateral to liquidate the fee, first transfer burn an equivalent amount of
-      //aTokens of the user
-      collateralAtoken.burnOnLiquidation(_user, vars.liquidatedCollateralForFee);
-
-      //then liquidate the fee by transferring it to the fee collection address
-      core.liquidateFee(
-        _collateral,
-        vars.liquidatedCollateralForFee,
-        addressesProvider.getTokenDistributor()
-      );
-
-      emit OriginationFeeLiquidated(
-        _collateral,
-        _reserve,
-        _user,
-        vars.feeLiquidated,
-        vars.liquidatedCollateralForFee,
-        //solium-disable-next-line
-        block.timestamp
-      );
-    }
-    emit LiquidationCall(
-      _collateral,
-      _reserve,
-      _user,
-      vars.actualAmountToLiquidate,
-      maxCollateralToLiquidate,
-      vars.borrowBalanceIncrease,
-      msg.sender,
-      _receiveAToken,
       //solium-disable-next-line
       block.timestamp
     );
