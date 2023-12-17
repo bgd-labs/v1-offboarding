@@ -3990,7 +3990,12 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
   }
 
   /**
-   * @dev users can invoke this function to liquidate an undercollateralized position.
+   * @dev This method behaves analog to a liquidationCall with some key differences:
+   * - the lb is fixed to 1%
+   * - you can liquidate healthy(collateralized) positions
+   * - you can liquidate up to 100%
+   * - you can only liquidate the underlying
+   * @dev users can invoke this function to liquidate an collateralized & undercollateralized position.
    * @param _reserve the address of the collateral to liquidated
    * @param _reserve the address of the principal reserve
    * @param _user the address of the borrower

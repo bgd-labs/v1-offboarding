@@ -1,6 +1,6 @@
 ```diff
 diff --git a/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol b/src/contracts/UpdatedLendingPoolLiquidationManager.sol
-index 0490cd7..6dc50a2 100644
+index 0490cd7..cbfdeb2 100644
 --- a/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol
 +++ b/src/contracts/UpdatedLendingPoolLiquidationManager.sol
 @@ -5871,6 +5871,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
@@ -22,10 +22,10 @@ index 0490cd7..6dc50a2 100644
 +  /**
 +   * @dev This method behaves analog to a liquidationCall with some key differences:
 +   * - the lb is fixed to 1%
-+   * - you can liquidate healthy addresses
-+   * - you can liquidate up to 100% (instead of 50%)
++   * - you can liquidate healthy(collateralized) addresses
++   * - you can liquidate up to 100%
 +   * - you can only liquidate the underlying
-+   * @dev users can invoke this function to liquidate an undercollateralized position.
++   * @dev users can invoke this function to liquidate a collateralized or undercollateralized position.
 +   * @param _reserve the address of the collateral to liquidated
 +   * @param _reserve the address of the principal reserve
 +   * @param _user the address of the borrower
@@ -187,12 +187,13 @@ index 0490cd7..6dc50a2 100644
    }
  
    /**
-@@ -6196,4 +6364,60 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6196,4 +6364,61 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
  
      return (collateralAmount, principalAmountNeeded);
    }
 +
 +  /**
++   * @dev this method behaves analog to calculateAvailableCollateralToLiquidate, but assumes a constant, asset independent liquidation bonus.
 +   * @dev calculates how much of a specific collateral can be liquidated, given
 +   * a certain amount of principal currency. This function needs to be called after
 +   * all the checks to validate the liquidation have been performed, otherwise it might fail.

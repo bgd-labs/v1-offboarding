@@ -5952,10 +5952,10 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   /**
    * @dev This method behaves analog to a liquidationCall with some key differences:
    * - the lb is fixed to 1%
-   * - you can liquidate healthy addresses
-   * - you can liquidate up to 100% (instead of 50%)
+   * - you can liquidate healthy(collateralized) addresses
+   * - you can liquidate up to 100%
    * - you can only liquidate the underlying
-   * @dev users can invoke this function to liquidate an undercollateralized position.
+   * @dev users can invoke this function to liquidate a collateralized or undercollateralized position.
    * @param _reserve the address of the collateral to liquidated
    * @param _reserve the address of the principal reserve
    * @param _user the address of the borrower
@@ -6366,6 +6366,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   }
 
   /**
+   * @dev this method behaves analog to calculateAvailableCollateralToLiquidate, but assumes a constant, asset independent liquidation bonus.
    * @dev calculates how much of a specific collateral can be liquidated, given
    * a certain amount of principal currency. This function needs to be called after
    * all the checks to validate the liquidation have been performed, otherwise it might fail.
