@@ -10,7 +10,7 @@ build  :; forge build --sizes
 test   :; forge test -vvv
 
 # Utilities
-download :; cast etherscan-source --chain ${chain} -d src/etherscan/${chain}_${address} ${address}
+download :; cast etherscan-source --chain ${chain} -d etherscan/${chain}_${address} ${address}
 git-diff :
 	@mkdir -p diffs
 	@npx prettier ${before} ${after} --write

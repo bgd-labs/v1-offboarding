@@ -1,8 +1,8 @@
 ```diff
-diff --git a/src/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol b/src/UpdatedLendingPoolLiquidationManager.sol
+diff --git a/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol b/src/contracts/UpdatedLendingPoolLiquidationManager.sol
 index 0490cd7..6dc50a2 100644
---- a/src/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol
-+++ b/src/UpdatedLendingPoolLiquidationManager.sol
+--- a/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol
++++ b/src/contracts/UpdatedLendingPoolLiquidationManager.sol
 @@ -5871,6 +5871,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
    address ethereumAddress;
  
