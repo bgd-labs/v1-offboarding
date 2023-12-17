@@ -51,7 +51,7 @@ interface ILendingPoolAddressesProvider {
   function setLendingPoolLiquidationManager(address _manager) external;
 }
 
-contract GhostTest is Test {
+contract UpgradeTest is Test {
   ILendingPoolAddressesProvider public constant provider =
     ILendingPoolAddressesProvider(0x24a42fD28C976A61Df5D00D0599C34c4f90748c8);
 
