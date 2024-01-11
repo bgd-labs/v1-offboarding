@@ -3960,13 +3960,14 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
    * @param _reserve the address of the principal reserve
    * @param _user the address of the borrower
    * @param _purchaseAmount the amount of principal that the liquidator wants to repay
+   * @param _receiveAToken DEPRECATED not used anymore
    **/
   function liquidationCall(
     address _collateral,
     address _reserve,
     address _user,
     uint256 _purchaseAmount,
-    bool
+    bool _receiveAToken
   ) external payable nonReentrant onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {
     address liquidationManager = addressesProvider.getLendingPoolLiquidationManager();
 

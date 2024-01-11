@@ -5954,6 +5954,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
    * @param _reserve the address of the principal reserve
    * @param _user the address of the borrower
    * @param _purchaseAmount the amount of principal that the liquidator wants to repay
+   * @param _receiveAToken DEPRECATED not used anymore
    * he wants to receive the underlying asset directly
    **/
   function liquidationCall(
@@ -5961,7 +5962,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
     address _reserve,
     address _user,
     uint256 _purchaseAmount,
-    bool
+    bool _receiveAToken
   ) external payable returns (uint256, string memory) {
     // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
     LiquidationCallLocalVars memory vars;
