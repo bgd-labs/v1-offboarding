@@ -1,6 +1,6 @@
 ```diff
 diff --git a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol b/src/contracts/UpdatedLendingPool.sol
-index 60f0e43..c07a643 100644
+index 60f0e43..4f74769 100644
 --- a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol
 +++ b/src/contracts/UpdatedLendingPool.sol
 @@ -3448,7 +3448,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
@@ -12,7 +12,7 @@ index 60f0e43..c07a643 100644
  
    function getRevision() internal pure returns (uint256) {
      return LENDINGPOOL_REVISION;
-@@ -3952,19 +3952,21 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -3952,12 +3952,15 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
  
    /**
     * @dev users can invoke this function to liquidate an undercollateralized position.
@@ -26,18 +26,11 @@ index 60f0e43..c07a643 100644
     * @param _purchaseAmount the amount of principal that the liquidator wants to repay
 -   * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
 -   * he wants to receive the underlying asset directly
++   * @param _receiveAToken DEPRECATED not used anymore
     **/
    function liquidationCall(
      address _collateral,
-     address _reserve,
-     address _user,
-     uint256 _purchaseAmount,
--    bool _receiveAToken
-+    bool
-   ) external payable nonReentrant onlyActiveReserve(_reserve) onlyActiveReserve(_collateral) {
-     address liquidationManager = addressesProvider.getLendingPoolLiquidationManager();
- 
-@@ -3976,7 +3978,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -3976,7 +3979,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
          _reserve,
          _user,
          _purchaseAmount,
@@ -46,7 +39,7 @@ index 60f0e43..c07a643 100644
        )
      );
      require(success, 'Liquidation call failed');
-@@ -4003,6 +4005,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -4003,6 +4006,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      uint256 _amount,
      bytes memory _params
    ) public nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
