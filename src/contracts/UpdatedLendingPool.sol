@@ -3974,12 +3974,11 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     //solium-disable-next-line
     (bool success, bytes memory result) = liquidationManager.delegatecall(
       abi.encodeWithSignature(
-        'liquidationCall(address,address,address,uint256,bool)',
+        'liquidationCall(address,address,address,uint256)',
         _collateral,
         _reserve,
         _user,
-        _purchaseAmount,
-        false
+        _purchaseAmount
       )
     );
     require(success, 'Liquidation call failed');

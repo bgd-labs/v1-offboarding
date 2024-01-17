@@ -1,6 +1,6 @@
 ```diff
 diff --git a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol b/src/contracts/UpdatedLendingPool.sol
-index 60f0e43..4f74769 100644
+index 60f0e43..ca33183 100644
 --- a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol
 +++ b/src/contracts/UpdatedLendingPool.sol
 @@ -3448,7 +3448,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
@@ -30,16 +30,22 @@ index 60f0e43..4f74769 100644
     **/
    function liquidationCall(
      address _collateral,
-@@ -3976,7 +3979,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -3971,12 +3974,11 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+     //solium-disable-next-line
+     (bool success, bytes memory result) = liquidationManager.delegatecall(
+       abi.encodeWithSignature(
+-        'liquidationCall(address,address,address,uint256,bool)',
++        'liquidationCall(address,address,address,uint256)',
+         _collateral,
          _reserve,
          _user,
-         _purchaseAmount,
+-        _purchaseAmount,
 -        _receiveAToken
-+        false
++        _purchaseAmount
        )
      );
      require(success, 'Liquidation call failed');
-@@ -4003,6 +4006,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -4003,6 +4005,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
      uint256 _amount,
      bytes memory _params
    ) public nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {

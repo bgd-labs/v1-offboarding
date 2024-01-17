@@ -5949,20 +5949,23 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   }
 
   /**
+   * @notice This version of liquidationCall is modified and contains
+   * changes that aim to allow offboarding of borrowers on aave v1 according to https://governance.aave.com/t/temp-check-bgd-further-aave-v1-deprecation-strategy/15893
+   * Therefore this modified version of liquidationCall does:
+   * - no longer check the users healthfactor, any borrowing user is potentially liquidatable
+   * - allows 100% liquidation (no more close factor)
+   * - no longer allows receiving aTokens
    * @dev users can invoke this function to liquidate an any collateral position.
    * @param _reserve the address of the collateral to liquidated
    * @param _reserve the address of the principal reserve
    * @param _user the address of the borrower
    * @param _purchaseAmount the amount of principal that the liquidator wants to repay
-   * @param _receiveAToken DEPRECATED not used anymore
-   * he wants to receive the underlying asset directly
    **/
   function liquidationCall(
     address _collateral,
     address _reserve,
     address _user,
-    uint256 _purchaseAmount,
-    bool _receiveAToken
+    uint256 _purchaseAmount
   ) external payable returns (uint256, string memory) {
     // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
     LiquidationCallLocalVars memory vars;
@@ -6076,7 +6079,6 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
 
     AToken collateralAtoken = AToken(core.getReserveATokenAddress(_collateral));
 
-    //otherwise receives the underlying asset
     //burn the equivalent amount of atoken
     collateralAtoken.burnOnLiquidation(_user, maxCollateralToLiquidate);
     core.transferToUser(_collateral, msg.sender, maxCollateralToLiquidate);

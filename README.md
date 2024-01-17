@@ -1,56 +1,22 @@
-# BGD forge template
+# V1 Deprecation PART1
 
-Basic template with prettier and rest configuration
+This repository contains the upgraded `LendingPool` and `LendingPoolLiquidationManager` contract required for the V1 Deprecation as described on [the forum](https://governance.aave.com/t/temp-check-bgd-further-aave-v1-deprecation-strategy/15893).
 
-To create a new project using this template run
+To keep the changes simple & easily verifyable the following steps are taken:
 
-```shell
-$ forge init --template bgd-labs/bgd-forge-template my_new_project
-```
+1. the `LendingPool` is upgraded in order to:
 
-## Recommended modules
+   - disable flashloans, as all potential incentives for suppliers should be removed
+   - deprecate the `receiveAToken` parameter on `liquidationCall` as for the offboarding it seem unnatural to allow it
 
-[bgd-labs/solidity-utils](https://github.com/bgd-labs/solidity-utils) - common contracts we use everywhere, ie transparent proxy and around
+2. the `LendingPoolLiquidationManager` is upgraded in order to:
+   - remove the corresponding `receiveAToken` parameter on `liquidationCall` as, again, allowing to keep aTokens seems unnatural in the process of offboarding
+   - the close factor is removed, as previously only liquidations for up to 50% were allowed, making some smaller liquidations unfeasible
+   - in order to allow offboarding healthy collateral the `liquidationCall` method was altered to no longer revert when trying to liquidate healthy position, but instead just switch the liquidationBonus. With this change healthy positions can be liquidated with a fixed 1% liquidationBonus, while unhealthy position will use the liquidationBonus of the collateralAsset like before
+     - while the changes to `liquidationCall` are limited, a new method `offboardingCalculateAvailableCollateralToLiquidate` was introduced which behaves analog to `calculateAvailableCollateralToLiquidate` but assumes the fixed 1% liquidationBonus and 100% close factor
 
-[bgd-labs/aave-address-book](https://github.com/bgd-labs/aave-address-book) - the best and only source about all deployed Aave ecosystem related contracts across all the chains
+As Aave V1 is quite old and deprecated for a while, we assume the amount of liquidation bots observing the pool is limited.
+Therefore the changes were applied in a way that:
 
-[bgd-labs/aave-helpers](https://github.com/bgd-labs/aave-helpers) - useful utils for integration, and not only testing related to Aave ecosystem contracts
-
-[Rari-Capital/solmate](https://github.com/Rari-Capital/solmate) - one of the best sources of base contracts for ERC20, ERC21, which will work with transparent proxy pattern out of the box
-
-[OpenZeppelin/openzeppelin-contracts](https://github.com/OpenZeppelin/openzeppelin-contracts) - another very reputable and well organized source of base contracts for tokens, access control and many others
-
-## Development
-
-This project uses [Foundry](https://getfoundry.sh). See the [book](https://book.getfoundry.sh/getting-started/installation.html) for detailed instructions on how to install and use Foundry.
-The template ships with sensible default so you can use default `foundry` commands without resorting to `MakeFile`.
-
-### Setup
-
-```sh
-cp .env.example .env
-forge install
-```
-
-### Test
-
-```sh
-forge test
-```
-
-## Advanced features
-
-### Diffing
-
-For contracts upgrading implementations it's quite important to diff the implementation code to spot potential issues and ensure only the intended changes are included.
-Therefore the `Makefile` includes some commands to streamline the diffing process.
-
-#### Download
-
-You can `download` the current contract code of a deployed contract via `make download chain=polygon address=0x00`. This will download the contract source for specified address to `src/etherscan/chain_address`. This command works for all chains with a etherscan compatible block explorer.
-
-#### Git diff
-
-You can `git-diff` a downloaded contract against your src via `make git-diff before=./etherscan/chain_address after=./src out=filename`. This command will diff the two folders via git patience algorithm and write the output to `diffs/filename.md`.
-
-**Caveat**: If the onchain implementation was verified using flatten, for generating the diff you need to flatten the new contract via `forge flatten` and supply the flattened file instead fo the whole `./src` folder.
+- does not disrupt existing bots
+- allows existing bots to liquidate healthy positions with 0 changes (the only change is on identifying positions, the liquidation process itself is analog and performed with the same method as before)

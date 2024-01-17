@@ -1,6 +1,6 @@
 ```diff
 diff --git a/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol b/src/contracts/UpdatedLendingPoolLiquidationManager.sol
-index 0490cd7..858da42 100644
+index 0490cd7..b7ec277 100644
 --- a/etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol
 +++ b/src/contracts/UpdatedLendingPoolLiquidationManager.sol
 @@ -5870,7 +5870,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
@@ -12,7 +12,7 @@ index 0490cd7..858da42 100644
  
    /**
     * @dev emitted when a borrow fee is liquidated
-@@ -5945,16 +5945,16 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -5945,37 +5945,33 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
     * of the LendingPool contract, the getRevision() function is needed.
     */
    function getRevision() internal pure returns (uint256) {
@@ -22,17 +22,30 @@ index 0490cd7..858da42 100644
  
    /**
 -   * @dev users can invoke this function to liquidate an undercollateralized position.
++   * @notice This version of liquidationCall is modified and contains
++   * changes that aim to allow offboarding of borrowers on aave v1 according to https://governance.aave.com/t/temp-check-bgd-further-aave-v1-deprecation-strategy/15893
++   * Therefore this modified version of liquidationCall does:
++   * - no longer check the users healthfactor, any borrowing user is potentially liquidatable
++   * - allows 100% liquidation (no more close factor)
++   * - no longer allows receiving aTokens
 +   * @dev users can invoke this function to liquidate an any collateral position.
     * @param _reserve the address of the collateral to liquidated
     * @param _reserve the address of the principal reserve
     * @param _user the address of the borrower
     * @param _purchaseAmount the amount of principal that the liquidator wants to repay
 -   * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
-+   * @param _receiveAToken DEPRECATED not used anymore
-    * he wants to receive the underlying asset directly
+-   * he wants to receive the underlying asset directly
     **/
    function liquidationCall(
-@@ -5969,13 +5969,6 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+     address _collateral,
+     address _reserve,
+     address _user,
+-    uint256 _purchaseAmount,
+-    bool _receiveAToken
++    uint256 _purchaseAmount
+   ) external payable returns (uint256, string memory) {
+     // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
+     LiquidationCallLocalVars memory vars;
  
      (, , , , , , , vars.healthFactorBelowThreshold) = dataProvider.calculateUserGlobalData(_user);
  
@@ -46,7 +59,7 @@ index 0490cd7..858da42 100644
      vars.userCollateralBalance = core.getUserUnderlyingAssetBalance(_collateral, _user);
  
      //if _user hasn't deposited this specific collateral, nothing can be liquidated
-@@ -6012,19 +6005,21 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6012,19 +6008,21 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
      }
  
      //all clear - calculate the max principal amount that can be liquidated
@@ -76,7 +89,7 @@ index 0490cd7..858da42 100644
          _collateral,
          _reserve,
          vars.actualAmountToLiquidate,
-@@ -6035,15 +6030,19 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6035,15 +6033,19 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
  
      //if there is a fee to liquidate, calculate the maximum amount of fee that can be liquidated
      if (vars.originationFee > 0) {
@@ -105,7 +118,7 @@ index 0490cd7..858da42 100644
      }
  
      //if principalAmountNeeded < vars.ActualAmountToLiquidate, there isn't enough
-@@ -6055,14 +6054,12 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6055,14 +6057,12 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
      }
  
      //if liquidator reclaims the underlying asset, we make sure there is enough available collateral in the reserve
@@ -126,7 +139,7 @@ index 0490cd7..858da42 100644
      }
  
      core.updateStateOnLiquidation(
-@@ -6074,20 +6071,15 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6074,20 +6074,14 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
        vars.feeLiquidated,
        vars.liquidatedCollateralForFee,
        vars.borrowBalanceIncrease,
@@ -145,14 +158,13 @@ index 0490cd7..858da42 100644
 -      collateralAtoken.burnOnLiquidation(_user, maxCollateralToLiquidate);
 -      core.transferToUser(_collateral, msg.sender, maxCollateralToLiquidate);
 -    }
-+    //otherwise receives the underlying asset
 +    //burn the equivalent amount of atoken
 +    collateralAtoken.burnOnLiquidation(_user, maxCollateralToLiquidate);
 +    core.transferToUser(_collateral, msg.sender, maxCollateralToLiquidate);
  
      //transfers the principal currency to the pool
      core.transferToReserve.value(msg.value)(_reserve, msg.sender, vars.actualAmountToLiquidate);
-@@ -6122,7 +6114,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6122,7 +6116,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
        maxCollateralToLiquidate,
        vars.borrowBalanceIncrease,
        msg.sender,
@@ -161,7 +173,7 @@ index 0490cd7..858da42 100644
        //solium-disable-next-line
        block.timestamp
      );
-@@ -6196,4 +6188,61 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
+@@ -6196,4 +6190,61 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
  
      return (collateralAmount, principalAmountNeeded);
    }
