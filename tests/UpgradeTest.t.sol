@@ -58,6 +58,12 @@ interface ILendingPool {
     );
 }
 
+interface ILendingPoolCore {
+  function getReserves() external view returns (address[] memory);
+
+  function getReserveInterestRateStrategyAddress(address) external view returns (address);
+}
+
 interface ILendingPoolAddressesProvider {
   function getLendingPoolCore() external view returns (address);
 
@@ -70,17 +76,52 @@ interface ILendingPoolAddressesProvider {
   function setLendingPoolLiquidationManager(address _manager) external;
 }
 
+interface IPoolConfigurator {
+  function setReserveInterestRateStrategyAddress(
+    address _reserve,
+    address _rateStrategyAddress
+  ) external;
+}
+
 contract UpgradeTest is Test {
   ILendingPoolAddressesProvider public constant provider =
     ILendingPoolAddressesProvider(0x24a42fD28C976A61Df5D00D0599C34c4f90748c8);
 
-  ILendingPool public pool = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
+  ILendingPool public constant pool = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
+
+  ILendingPoolCore public constant core =
+    ILendingPoolCore(0x3dfd23A6c5E8BbcFc9581d2E864a68feb6a076d3);
+
+  IPoolConfigurator configurator = IPoolConfigurator(0x4965f6FA20fE9728deCf5165016fc338a5a85aBF);
 
   function setUp() public {
     vm.createSelectFork(vm.rpcUrl('mainnet'), 19075684);
     vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
     provider.setLendingPoolLiquidationManager(0x1a7Dde6344d5F2888209DdB446756FE292e1325e);
     provider.setLendingPoolImpl(0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9);
+
+    bytes memory irBytecode = abi.encodePacked(
+      vm.getCode(
+        'UpdatedCollateralReserveIntrestRateStrategy.sol:CollateralReserveInterestRateStrategy'
+      ),
+      abi.encode(
+        address(provider),
+        0,
+        10000000000000000000000000, // 1%
+        50000000000000000000000000, // 5%
+        20000000000000000000000000, // 2%
+        100000000000000000000000000 // 10%
+      )
+    );
+    address ir;
+    assembly {
+      ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
+    }
+
+    address[] memory reserves = core.getReserves();
+    for (uint256 i = 0; i < reserves.length; i++) {
+      configurator.setReserveInterestRateStrategyAddress(reserves[i], ir);
+    }
     vm.stopPrank();
   }
 
@@ -121,6 +162,14 @@ contract UpgradeTest is Test {
       uint256 borrowsDiff = totalBorrowsETHBefore - totalBorrowsETHAfter;
       assertGt(collateralDiff, borrowsDiff);
       assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.99 ether, 0.001 ether); // should be ~1% + rounding
+    }
+  }
+
+  function test_ir() public {
+    address[] memory reserves = core.getReserves();
+    for (uint256 i = 0; i < reserves.length; i++) {
+      emit log_named_address('reserve', reserves[i]);
+      emit log_named_address('ir', core.getReserveInterestRateStrategyAddress(reserves[i]));
     }
   }
 }

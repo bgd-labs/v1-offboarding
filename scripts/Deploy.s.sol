@@ -13,25 +13,23 @@ contract Deploy is Script {
 
   function run() external {
     vm.startBroadcast();
-    // bytes memory liquidationManagerBytecode = abi.encodePacked(
-    //   vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
-    // );
-    address liquidationManager = 0x1a7Dde6344d5F2888209DdB446756FE292e1325e;
-    // assembly {
-    //   liquidationManager := create(
-    //     0,
-    //     add(liquidationManagerBytecode, 0x20),
-    //     mload(liquidationManagerBytecode)
-    //   )
-    // }
-    bytes memory lendingPoolBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPool.sol:LendingPool')
+    bytes memory irBytecode = abi.encodePacked(
+      vm.getCode(
+        'UpdatedCollateralReserveIntrestRateStrategy.sol:CollateralReserveInterestRateStrategy'
+      ),
+      abi.encode(
+        address(ADDRESSES_PROVIDER),
+        0,
+        10000000000000000000000000, // 1%
+        50000000000000000000000000, // 5%
+        20000000000000000000000000, // 2%
+        100000000000000000000000000 // 10%
+      )
     );
-    address poolImpl;
+    address ir;
     assembly {
-      poolImpl := create(0, add(lendingPoolBytecode, 0x20), mload(lendingPoolBytecode))
+      ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
     }
-    ILendingPool(poolImpl).initialize(ADDRESSES_PROVIDER);
     vm.stopBroadcast();
   }
 }
