@@ -15,7 +15,7 @@ contract Deploy is Script {
     vm.startBroadcast();
     bytes memory irBytecode = abi.encodePacked(
       vm.getCode(
-        'UpdatedCollateralReserveIntrestRateStrategy.sol:CollateralReserveInterestRateStrategy'
+        'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
       ),
       abi.encode(
         address(ADDRESSES_PROVIDER),
