@@ -102,7 +102,7 @@ contract UpgradeTest is Test {
 
     bytes memory irBytecode = abi.encodePacked(
       vm.getCode(
-        'UpdatedCollateralReserveIntrestRateStrategy.sol:CollateralReserveInterestRateStrategy'
+        'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
       ),
       abi.encode(
         address(provider),
