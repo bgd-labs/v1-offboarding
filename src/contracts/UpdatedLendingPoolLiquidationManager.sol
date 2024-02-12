@@ -5870,7 +5870,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   IFeeProvider feeProvider;
   address ethereumAddress;
 
-  uint256 constant OFFBOARDING_LIQUIDATION_BONUS = 101; // 1%
+  uint256 constant OFFBOARDING_LIQUIDATION_BONUS = 103; // 1%
 
   /**
    * @dev emitted when a borrow fee is liquidated

@@ -1,56 +1,65 @@
 ```diff
-diff --git a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol b/src/contracts/UpdatedLendingPool.sol
-index 60f0e43..ca33183 100644
---- a/etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol
+diff --git a/etherscan/1_0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9/LendingPool/src/contracts/UpdatedLendingPool.sol b/src/contracts/UpdatedLendingPool.sol
+index ca33183..f84ef18 100644
+--- a/etherscan/1_0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9/LendingPool/src/contracts/UpdatedLendingPool.sol
 +++ b/src/contracts/UpdatedLendingPool.sol
-@@ -3448,7 +3448,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+@@ -3504,6 +3504,58 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
+     emit Deposit(_reserve, msg.sender, _amount, _referralCode, block.timestamp);
+   }
  
-   uint256 public constant UINT_MAX_VALUE = uint256(-1);
- 
--  uint256 public constant LENDINGPOOL_REVISION = 0x6;
-+  uint256 public constant LENDINGPOOL_REVISION = 0x7;
- 
-   function getRevision() internal pure returns (uint256) {
-     return LENDINGPOOL_REVISION;
-@@ -3952,12 +3952,15 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
- 
++  struct DebtPosition {
++    address user;
++    address debtAsset;
++    uint256 rateMode;
++  }
++
++  struct CollateralPosition {
++    address user;
++    address collateralAsset;
++    uint256 amount;
++  }
++
++  function batchSeizePosition(
++    CollateralPosition[] calldata collateralPositions,
++    DebtPosition[] calldata debtPositions
++  ) external {
++    for (uint256 i; i < collateralPositions.length; i++) {
++      uint256 amount = collateralPositions[i].amount == uint256(-1)
++        ? AToken(collateralPositions[i].collateralAsset).balanceOf(collateralPositions[i].user)
++        : collateralPositions[i].amount;
++
++      AToken(collateralPositions[i].collateralAsset).burnOnLiquidation(
++        collateralPositions[i].user,
++        amount
++      );
++      core.updateStateOnRedeem(
++        collateralPositions[i].collateralAsset,
++        collateralPositions[i].user,
++        amount,
++        false // disableing collateral is no longer necessary
++      );
++    }
++    for (uint256 i; i < debtPositions.length; i++) {
++      (, uint256 compoundedBorrowBalance, uint256 borrowBalanceIncrease) = core
++        .getUserBorrowBalances(debtPositions[i].debtAsset, debtPositions[i].user);
++
++      uint256 originationFee = core.getUserOriginationFee(
++        debtPositions[i].debtAsset,
++        debtPositions[i].user
++      );
++
++      core.updateStateOnRepay(
++        debtPositions[i].debtAsset,
++        debtPositions[i].user,
++        compoundedBorrowBalance,
++        originationFee,
++        borrowBalanceIncrease,
++        false // disabeling borrowing flag is no longer needed
++      );
++    }
++  }
++
    /**
-    * @dev users can invoke this function to liquidate an undercollateralized position.
-+   * This version has some important differences to the previous:
-+   * - a liquidator **can** liquidate up to 100% of the position
-+   * - a liquidator **can** liquidate healthy(collateralized) positions for a fixed 1% liquidationBonus
-+   * - a liquidator **can not** receive aTokens as the result of the liquidation
-    * @param _reserve the address of the collateral to liquidated
-    * @param _reserve the address of the principal reserve
-    * @param _user the address of the borrower
-    * @param _purchaseAmount the amount of principal that the liquidator wants to repay
--   * @param _receiveAToken true if the liquidators wants to receive the aTokens, false if
--   * he wants to receive the underlying asset directly
-+   * @param _receiveAToken DEPRECATED not used anymore
-    **/
-   function liquidationCall(
-     address _collateral,
-@@ -3971,12 +3974,11 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
-     //solium-disable-next-line
-     (bool success, bytes memory result) = liquidationManager.delegatecall(
-       abi.encodeWithSignature(
--        'liquidationCall(address,address,address,uint256,bool)',
-+        'liquidationCall(address,address,address,uint256)',
-         _collateral,
-         _reserve,
-         _user,
--        _purchaseAmount,
--        _receiveAToken
-+        _purchaseAmount
-       )
-     );
-     require(success, 'Liquidation call failed');
-@@ -4003,6 +4005,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
-     uint256 _amount,
-     bytes memory _params
-   ) public nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
-+    require(false, 'V1 flashloans are disabled');
-     //check that the reserve has enough available liquidity
-     //we avoid using the getAvailableLiquidity() function in LendingPoolCore to save gas
-     uint256 availableLiquidityBefore = _reserve == EthAddressLib.ethAddress()
+    * @dev Redeems the underlying amount of assets requested by _user.
+    * This function is executed by the overlying aToken contract in response to a redeem action.
 ```
