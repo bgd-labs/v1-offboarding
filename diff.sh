@@ -1,5 +1,5 @@
-#make download chain=1 address=0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a
-#make download chain=1 address=0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486
+#make download chain=1 address=0x1a7Dde6344d5F2888209DdB446756FE292e1325e #lm
+#make download chain=1 address=0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9 #lp
 
-make git-diff before=etherscan/1_0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a/LendingPoolLiquidationManager/Contract.sol after=src/contracts/UpdatedLendingPoolLiquidationManager.sol out=LendingPoolLiquidationManager
-make git-diff before=etherscan/1_0xcB8c3Dbf2530d6b07b50d0BcE91F7A04FA696486/LendingPool/src/contracts/v1Pool/LendingPool/LendingPool.sol after=src/contracts/UpdatedLendingPool.sol out=LendingPool
+make git-diff before=etherscan/1_0x1a7Dde6344d5F2888209DdB446756FE292e1325e/LendingPoolLiquidationManager/src/contracts/UpdatedLendingPoolLiquidationManager.sol after=src/contracts/UpdatedLendingPoolLiquidationManager.sol out=LendingPoolLiquidationManager
+make git-diff before=etherscan/1_0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9/LendingPool/src/contracts/UpdatedLendingPool.sol after=src/contracts/UpdatedLendingPool.sol out=LendingPool
