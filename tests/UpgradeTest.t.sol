@@ -37,6 +37,31 @@ interface ILendingPool {
       uint256 ltv,
       uint256 healthFactor
     );
+
+  function getUserReserveData(
+    address _reserve,
+    address _user
+  )
+    external
+    view
+    returns (
+      uint256 currentATokenBalance,
+      uint256 currentBorrowBalance,
+      uint256 principalBorrowBalance,
+      uint256 borrowRateMode,
+      uint256 borrowRate,
+      uint256 liquidityRate,
+      uint256 originationFee,
+      uint256 variableBorrowIndex,
+      uint256 lastUpdateTimestamp,
+      bool usageAsCollateralEnabled
+    );
+}
+
+interface ILendingPoolCore {
+  function getReserves() external view returns (address[] memory);
+
+  function getReserveInterestRateStrategyAddress(address) external view returns (address);
 }
 
 interface ILendingPoolAddressesProvider {
@@ -51,40 +76,52 @@ interface ILendingPoolAddressesProvider {
   function setLendingPoolLiquidationManager(address _manager) external;
 }
 
+interface IPoolConfigurator {
+  function setReserveInterestRateStrategyAddress(
+    address _reserve,
+    address _rateStrategyAddress
+  ) external;
+}
+
 contract UpgradeTest is Test {
   ILendingPoolAddressesProvider public constant provider =
     ILendingPoolAddressesProvider(0x24a42fD28C976A61Df5D00D0599C34c4f90748c8);
 
-  address public manager; //= ILendingPoolLiquidationManager(0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a);
+  ILendingPool public constant pool = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
 
-  ILendingPool public pool = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
+  ILendingPoolCore public constant core =
+    ILendingPoolCore(0x3dfd23A6c5E8BbcFc9581d2E864a68feb6a076d3);
+
+  IPoolConfigurator configurator = IPoolConfigurator(0x4965f6FA20fE9728deCf5165016fc338a5a85aBF);
 
   function setUp() public {
-    vm.createSelectFork(vm.rpcUrl('mainnet'), 18770009);
-    // deploy liquidationManager
-    bytes memory liquidationManagerBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
-    );
-    address liquidationManager;
-    assembly {
-      liquidationManager := create(
-        0,
-        add(liquidationManagerBytecode, 0x20),
-        mload(liquidationManagerBytecode)
-      )
-    }
-    manager = liquidationManager;
-    // deploy pool
-    bytes memory lendingPoolBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPool.sol:LendingPool')
-    );
-    address poolImpl;
-    assembly {
-      poolImpl := create(0, add(lendingPoolBytecode, 0x20), mload(lendingPoolBytecode))
-    }
+    vm.createSelectFork(vm.rpcUrl('mainnet'), 19075684);
     vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
-    provider.setLendingPoolLiquidationManager(manager);
-    provider.setLendingPoolImpl(poolImpl);
+    provider.setLendingPoolLiquidationManager(0x1a7Dde6344d5F2888209DdB446756FE292e1325e);
+    provider.setLendingPoolImpl(0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9);
+
+    bytes memory irBytecode = abi.encodePacked(
+      vm.getCode(
+        'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
+      ),
+      abi.encode(
+        address(provider),
+        0,
+        10000000000000000000000000, // 1%
+        50000000000000000000000000, // 5%
+        20000000000000000000000000, // 2%
+        100000000000000000000000000 // 10%
+      )
+    );
+    address ir;
+    assembly {
+      ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
+    }
+
+    address[] memory reserves = core.getReserves();
+    for (uint256 i = 0; i < reserves.length; i++) {
+      configurator.setReserveInterestRateStrategyAddress(reserves[i], ir);
+    }
     vm.stopPrank();
   }
 
@@ -102,7 +139,11 @@ contract UpgradeTest is Test {
       0x0000000000085d4780B73119b644AE5ecd22b376 // TUSD
     );
     for (uint256 i = 0; i < users.length; i++) {
-      deal(users[i].debt, address(this), 26936742563757401924489);
+      (, uint256 currentBorrowBalance, , , , , , , , ) = pool.getUserReserveData(
+        users[i].debt,
+        users[i].user
+      );
+      deal(users[i].debt, address(this), currentBorrowBalance);
       // offboarding liquidations should provide a fixed 1% bonus
       (, uint256 totalCollateralETHBefore, uint256 totalBorrowsETHBefore, , , , , ) = pool
         .getUserAccountData(users[i].user);
@@ -121,6 +162,14 @@ contract UpgradeTest is Test {
       uint256 borrowsDiff = totalBorrowsETHBefore - totalBorrowsETHAfter;
       assertGt(collateralDiff, borrowsDiff);
       assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.99 ether, 0.001 ether); // should be ~1% + rounding
+    }
+  }
+
+  function test_ir() public {
+    address[] memory reserves = core.getReserves();
+    for (uint256 i = 0; i < reserves.length; i++) {
+      emit log_named_address('reserve', reserves[i]);
+      emit log_named_address('ir', core.getReserveInterestRateStrategyAddress(reserves[i]));
     }
   }
 }

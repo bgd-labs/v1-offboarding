@@ -7,30 +7,29 @@ interface ILendingPool {
   function initialize(address _addressesProvider) external;
 }
 
+//  command: make deploy-ledger contract=scripts/Deploy.s.sol:Deploy chain=mainnet
 contract Deploy is Script {
   address constant ADDRESSES_PROVIDER = 0x24a42fD28C976A61Df5D00D0599C34c4f90748c8;
 
   function run() external {
     vm.startBroadcast();
-    bytes memory liquidationManagerBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
-    );
-    address liquidationManager;
-    assembly {
-      liquidationManager := create(
+    bytes memory irBytecode = abi.encodePacked(
+      vm.getCode(
+        'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
+      ),
+      abi.encode(
+        address(ADDRESSES_PROVIDER),
         0,
-        add(liquidationManagerBytecode, 0x20),
-        mload(liquidationManagerBytecode)
+        10000000000000000000000000, // 1%
+        50000000000000000000000000, // 5%
+        20000000000000000000000000, // 2%
+        100000000000000000000000000 // 10%
       )
-    }
-    bytes memory lendingPoolBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPool.sol:LendingPool')
     );
-    address poolImpl;
+    address ir;
     assembly {
-      poolImpl := create(0, add(lendingPoolBytecode, 0x20), mload(lendingPoolBytecode))
+      ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
     }
-    ILendingPool(poolImpl).initialize(ADDRESSES_PROVIDER);
     vm.stopBroadcast();
   }
 }
