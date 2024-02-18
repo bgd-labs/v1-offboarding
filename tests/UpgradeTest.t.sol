@@ -58,12 +58,6 @@ interface ILendingPool {
     );
 }
 
-interface ILendingPoolCore {
-  function getReserves() external view returns (address[] memory);
-
-  function getReserveInterestRateStrategyAddress(address) external view returns (address);
-}
-
 interface ILendingPoolAddressesProvider {
   function getLendingPoolCore() external view returns (address);
 
@@ -76,52 +70,31 @@ interface ILendingPoolAddressesProvider {
   function setLendingPoolLiquidationManager(address _manager) external;
 }
 
-interface IPoolConfigurator {
-  function setReserveInterestRateStrategyAddress(
-    address _reserve,
-    address _rateStrategyAddress
-  ) external;
-}
-
 contract UpgradeTest is Test {
-  ILendingPoolAddressesProvider public constant provider =
+  ILendingPoolAddressesProvider public constant ADDRESSES_PROVIDER =
     ILendingPoolAddressesProvider(0x24a42fD28C976A61Df5D00D0599C34c4f90748c8);
 
-  ILendingPool public constant pool = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
+  address public manager; //= ILendingPoolLiquidationManager(0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a);
 
-  ILendingPoolCore public constant core =
-    ILendingPoolCore(0x3dfd23A6c5E8BbcFc9581d2E864a68feb6a076d3);
-
-  IPoolConfigurator configurator = IPoolConfigurator(0x4965f6FA20fE9728deCf5165016fc338a5a85aBF);
+  ILendingPool public constant POOL = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
 
   function setUp() public {
-    vm.createSelectFork(vm.rpcUrl('mainnet'), 19075684);
-    vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
-    provider.setLendingPoolLiquidationManager(0x1a7Dde6344d5F2888209DdB446756FE292e1325e);
-    provider.setLendingPoolImpl(0x89A943BAc327c9e217d70E57DCD57C7f2a8C3fA9);
-
-    bytes memory irBytecode = abi.encodePacked(
-      vm.getCode(
-        'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
-      ),
-      abi.encode(
-        address(provider),
-        0,
-        10000000000000000000000000, // 1%
-        50000000000000000000000000, // 5%
-        20000000000000000000000000, // 2%
-        100000000000000000000000000 // 10%
-      )
+    vm.createSelectFork(vm.rpcUrl('mainnet'), 19233649);
+    // deploy liquidationManager
+    bytes memory liquidationManagerBytecode = abi.encodePacked(
+      vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
     );
-    address ir;
+    address liquidationManager;
     assembly {
-      ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
+      liquidationManager := create(
+        0,
+        add(liquidationManagerBytecode, 0x20),
+        mload(liquidationManagerBytecode)
+      )
     }
-
-    address[] memory reserves = core.getReserves();
-    for (uint256 i = 0; i < reserves.length; i++) {
-      configurator.setReserveInterestRateStrategyAddress(reserves[i], ir);
-    }
+    manager = liquidationManager;
+    vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
+    ADDRESSES_PROVIDER.setLendingPoolLiquidationManager(manager);
     vm.stopPrank();
   }
 
@@ -131,45 +104,55 @@ contract UpgradeTest is Test {
     address debt;
   }
 
-  function test_healthyLiquidateShouldUse100bpsLB() public {
-    V1User[] memory users = new V1User[](1);
-    users[0] = V1User(
-      0x1F0aeAeE69468727BA258B0cf692E6bfecc2E286,
-      0x514910771AF9Ca656af840dff83E8264EcF986CA, // LINK
-      0x0000000000085d4780B73119b644AE5ecd22b376 // TUSD
-    );
+  function test_healthyLiquidateShouldUse300bpsLB() public {
+    V1User[] memory users = _getUsers();
     for (uint256 i = 0; i < users.length; i++) {
-      (, uint256 currentBorrowBalance, , , , , , , , ) = pool.getUserReserveData(
+      (, uint256 currentBorrowBalance, , , , , , , , ) = POOL.getUserReserveData(
         users[i].debt,
         users[i].user
       );
-      deal(users[i].debt, address(this), currentBorrowBalance);
       // offboarding liquidations should provide a fixed 1% bonus
-      (, uint256 totalCollateralETHBefore, uint256 totalBorrowsETHBefore, , , , , ) = pool
+      (, uint256 totalCollateralETHBefore, uint256 totalBorrowsETHBefore, , , , , ) = POOL
         .getUserAccountData(users[i].user);
-      IERC20(users[i].debt).approve(provider.getLendingPoolCore(), type(uint256).max);
-      pool.liquidationCall(
-        users[i].collateral,
-        users[i].debt,
-        users[i].user,
-        type(uint256).max,
-        false
-      );
-      (, uint256 totalCollateralETHAfter, uint256 totalBorrowsETHAfter, , , , , ) = pool
+      if (users[i].debt == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+        deal(address(this), 1000 ether);
+        POOL.liquidationCall{value: currentBorrowBalance}(
+          users[i].collateral,
+          users[i].debt,
+          users[i].user,
+          type(uint256).max,
+          false
+        );
+      } else {
+        deal(users[i].debt, address(this), currentBorrowBalance);
+        assertEq(currentBorrowBalance, IERC20(users[i].debt).balanceOf(address(this)));
+        IERC20(users[i].debt).approve(ADDRESSES_PROVIDER.getLendingPoolCore(), 0);
+        IERC20(users[i].debt).approve(ADDRESSES_PROVIDER.getLendingPoolCore(), type(uint256).max);
+        POOL.liquidationCall(
+          users[i].collateral,
+          users[i].debt,
+          users[i].user,
+          type(uint256).max,
+          false
+        );
+      }
+      (, uint256 totalCollateralETHAfter, uint256 totalBorrowsETHAfter, , , , , ) = POOL
         .getUserAccountData(users[i].user);
 
       uint256 collateralDiff = totalCollateralETHBefore - totalCollateralETHAfter;
       uint256 borrowsDiff = totalBorrowsETHBefore - totalBorrowsETHAfter;
       assertGt(collateralDiff, borrowsDiff);
-      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.99 ether, 0.001 ether); // should be ~1% + rounding
+      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.97 ether, 0.001 ether); // should be ~3% + rounding
     }
   }
 
-  function test_ir() public {
-    address[] memory reserves = core.getReserves();
-    for (uint256 i = 0; i < reserves.length; i++) {
-      emit log_named_address('reserve', reserves[i]);
-      emit log_named_address('ir', core.getReserveInterestRateStrategyAddress(reserves[i]));
-    }
+  function _getUsers() internal pure returns (V1User[] memory) {
+    V1User[] memory users = new V1User[](1);
+    users[0] = V1User(
+      payable(0x1F0aeAeE69468727BA258B0cf692E6bfecc2E286),
+      0x514910771AF9Ca656af840dff83E8264EcF986CA, // LINK
+      0x0000000000085d4780B73119b644AE5ecd22b376 // TUSD
+    );
+    return users;
   }
 }
