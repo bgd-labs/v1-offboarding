@@ -7,6 +7,10 @@ import {GovernanceV3Ethereum} from 'aave-address-book/GovernanceV3Ethereum.sol';
 import {IERC20} from 'solidity-utils/contracts/oz-common/interfaces/IERC20.sol';
 import {SafeERC20} from 'solidity-utils/contracts/oz-common/SafeERC20.sol';
 
+interface IAToken {
+  function redeem(uint256 _amount) external;
+}
+
 interface ILendingPool {
   function liquidationCall(
     address _collateral,
@@ -15,6 +19,8 @@ interface ILendingPool {
     uint256 _purchaseAmount,
     bool _receiveAToken
   ) external payable;
+
+  function repay(address _reserve, uint256 _amount, address payable _onBehalfOf) external payable;
 
   function offboardingLiquidationCall(
     address _collateral,
@@ -86,6 +92,8 @@ interface ILendingPoolCore {
   function getReserves() external view returns (address[] memory);
 
   function getReserveInterestRateStrategyAddress(address) external view returns (address);
+
+  function getReserveATokenAddress(address) external view returns (address);
 }
 
 interface IEarnRebalance {
@@ -99,8 +107,6 @@ contract UpgradeTest is Test {
     IPoolConfigurator(0x4965f6FA20fE9728deCf5165016fc338a5a85aBF);
   ILendingPoolCore public constant CORE =
     ILendingPoolCore(0x3dfd23A6c5E8BbcFc9581d2E864a68feb6a076d3);
-
-  address public manager; //= ILendingPoolLiquidationManager(0x31cceeb1fA3DbEAf7baaD25125b972A17624A40a);
 
   ILendingPool public constant POOL = ILendingPool(0x398eC7346DcD622eDc5ae82352F02bE94C62d119);
 
@@ -128,21 +134,13 @@ contract UpgradeTest is Test {
     // 2. update irs to be zero & deactivate reserve
     address[] memory reserves = CORE.getReserves();
     for (uint256 i = 0; i < reserves.length; i++) {
-      // emit log_bytes(
-      //   abi.encodeWithSelector(
-      //     IPoolConfigurator.setReserveInterestRateStrategyAddress.selector,
-      //     reserves[i],
-      //     ir
-      //   )
-      // );
       CONFIGURATOR.setReserveInterestRateStrategyAddress(reserves[i], ir);
     }
-
     vm.stopPrank();
   }
 
   struct V1User {
-    address user;
+    address payable user;
     address collateral;
     address debt;
   }
@@ -189,14 +187,29 @@ contract UpgradeTest is Test {
     }
   }
 
-  function _getUsers() internal pure returns (V1User[] memory) {
-    V1User[] memory users = new V1User[](1);
-    users[0] = V1User(
-      payable(0x532e32e13eeD4200Cf3e28bD0Cf245c2F6CAfD71),
-      AaveV2EthereumAssets.LINK_UNDERLYING,
-      AaveV2EthereumAssets.USDC_UNDERLYING
-    );
-    return users;
+  function test_repay() public {
+    V1User[] memory users = _getUsers();
+    for (uint256 i = 0; i < users.length; i++) {
+      vm.startPrank(users[i].user);
+
+      // repay
+      _repayV1(users[i].debt, users[i].user);
+
+      vm.stopPrank();
+    }
+  }
+
+  function test_redeem() public {
+    V1User[] memory users = _getUsers();
+
+    for (uint256 i = 0; i < users.length; i++) {
+      vm.startPrank(users[i].user);
+
+      // redeem
+      _redeemV1(users[i].collateral, users[i].user, 100);
+
+      vm.stopPrank();
+    }
   }
 
   function test_rebalanceUSDC() public {
@@ -213,5 +226,41 @@ contract UpgradeTest is Test {
 
   function test_rebalanceLINK() public {
     IEarnRebalance(0x29E240CFD7946BA20895a7a02eDb25C210f9f324).rebalance();
+  }
+
+  function _getUsers() internal pure returns (V1User[] memory) {
+    V1User[] memory users = new V1User[](1);
+    users[0] = V1User(
+      payable(0x532e32e13eeD4200Cf3e28bD0Cf245c2F6CAfD71),
+      AaveV2EthereumAssets.LINK_UNDERLYING,
+      AaveV2EthereumAssets.USDC_UNDERLYING
+    );
+    return users;
+  }
+
+  function _repayV1(address debtAsset, address payable user) internal {
+    (, uint256 currentBorrowBalance, , , , , uint256 originationFee, , , ) = POOL
+      .getUserReserveData(debtAsset, user);
+    uint256 debt = currentBorrowBalance + originationFee;
+    if (debtAsset == 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE) {
+      deal(user, debt);
+      POOL.repay{value: debt}(debtAsset, type(uint256).max, user);
+    } else {
+      deal(debtAsset, user, debt);
+      IERC20(debtAsset).approve(ADDRESSES_PROVIDER.getLendingPoolCore(), 0);
+      IERC20(debtAsset).approve(ADDRESSES_PROVIDER.getLendingPoolCore(), type(uint256).max);
+      POOL.repay(debtAsset, type(uint256).max, user);
+    }
+    (, uint256 currentBorrowBalanceAfter, , , , , uint256 originationFeeAfter, , , ) = POOL
+      .getUserReserveData(debtAsset, user);
+    assertEq(currentBorrowBalanceAfter + originationFeeAfter, 0, vm.toString(debtAsset));
+  }
+
+  function _redeemV1(address token, address user, uint256 amount) internal {
+    (uint256 currentATokenBalance, , , , , , , , , ) = POOL.getUserReserveData(token, user);
+    address aToken = CORE.getReserveATokenAddress(token);
+    IAToken(aToken).redeem(amount);
+    (uint256 currentATokenBalanceAfter, , , , , , , , , ) = POOL.getUserReserveData(token, user);
+    assertEq(currentATokenBalance - amount, currentATokenBalanceAfter);
   }
 }
