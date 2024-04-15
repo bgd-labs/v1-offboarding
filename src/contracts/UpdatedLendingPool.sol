@@ -5230,7 +5230,6 @@ contract LendingPoolCore is VersionedInitializable {
     address _reserve,
     address _rateStrategyAddress
   ) external onlyLendingPoolConfigurator {
-    updateReserveInterestRatesAndTimestampInternal(_reserve, 0, 0);
     reserves[_reserve].interestRateStrategyAddress = _rateStrategyAddress;
     updateReserveInterestRatesAndTimestampInternal(_reserve, 0, 0);
   }

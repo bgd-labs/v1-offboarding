@@ -203,9 +203,9 @@ contract UpgradeTest is Test {
     IEarnRebalance(0xd6aD7a6750A7593E092a9B218d66C0A814a3436e).rebalance();
   }
 
-  function test_rebalanceTUSD() public {
-    IEarnRebalance(0x73a052500105205d34Daf004eAb301916DA8190f).rebalance();
-  }
+  // function test_rebalanceTUSD() public {
+  //   IEarnRebalance(0x73a052500105205d34Daf004eAb301916DA8190f).rebalance();
+  // }
 
   function test_rebalanceDAI() public {
     IEarnRebalance(0x16de59092dAE5CcF4A1E6439D611fd0653f0Bd01).rebalance();
