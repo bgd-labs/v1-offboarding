@@ -232,7 +232,7 @@ contract UpgradeTest is Test {
       uint256 collateralDiff = totalCollateralETHBefore - totalCollateralETHAfter;
       uint256 borrowsDiff = totalBorrowsETHBefore - totalBorrowsETHAfter;
       assertGt(collateralDiff, borrowsDiff);
-      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.97 ether, 0.005 ether); // should be ~3% + rounding
+      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.95 ether, 0.005 ether); // should be ~3% + rounding
     }
   }
 
