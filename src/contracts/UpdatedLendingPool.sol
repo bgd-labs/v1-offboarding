@@ -4188,7 +4188,6 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
  * (eg, updateStateOnBorrow() does not enforce that borrowed is enabled on the reserve).
  * The check that an action can be performed is a duty of the overlying LendingPool contract.
  **/
-
 contract LendingPoolCore is VersionedInitializable {
   using SafeMath for uint256;
   using WadRayMath for uint256;
@@ -4243,7 +4242,7 @@ contract LendingPoolCore is VersionedInitializable {
 
   address[] public reservesList;
 
-  uint256 public constant CORE_REVISION = 0x7;
+  uint256 public constant CORE_REVISION = 0x8;
 
   /**
    * @dev returns the revision number of the contract
@@ -5227,12 +5226,13 @@ contract LendingPoolCore is VersionedInitializable {
    * @param _reserve the address of the reserve
    * @param _rateStrategyAddress the address of the interest rate strategy contract
    **/
-
   function setReserveInterestRateStrategyAddress(
     address _reserve,
     address _rateStrategyAddress
   ) external onlyLendingPoolConfigurator {
+    updateReserveInterestRatesAndTimestampInternal(_reserve, 0, 0);
     reserves[_reserve].interestRateStrategyAddress = _rateStrategyAddress;
+    updateReserveInterestRatesAndTimestampInternal(_reserve, 0, 0);
   }
 
   /**

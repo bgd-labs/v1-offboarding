@@ -7,6 +7,9 @@ libs = ['lib']
 remappings = [
 ]
 fs_permissions = [{ access = "write", path = "./reports" }, { access = "read", path = "./out"}]
+libraries=[
+    "src/contracts/UpdatedLendingPool.sol:CoreLibrary:0x57fF2Cbf0D1dfd79b497795B2eDd3B56F1a30397"
+]
 
 [rpc_endpoints]
 mainnet = "${RPC_MAINNET}"
