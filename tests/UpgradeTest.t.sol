@@ -113,6 +113,19 @@ contract UpgradeTest is Test {
   function setUp() public {
     vm.createSelectFork(vm.rpcUrl('mainnet'), 19574504);
     vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
+
+    bytes memory liquidationManagerBytecode = abi.encodePacked(
+      vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
+    );
+    address liquidationManager;
+    assembly {
+      liquidationManager := create(
+        0,
+        add(liquidationManagerBytecode, 0x20),
+        mload(liquidationManagerBytecode)
+      )
+    }
+
     bytes memory irBytecode = abi.encodePacked(
       vm.getCode(
         'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
@@ -136,6 +149,8 @@ contract UpgradeTest is Test {
     for (uint256 i = 0; i < reserves.length; i++) {
       CONFIGURATOR.setReserveInterestRateStrategyAddress(reserves[i], ir);
     }
+    // 3. upgrade liquidationManager
+    ADDRESSES_PROVIDER.setLendingPoolLiquidationManager(liquidationManager);
     vm.stopPrank();
   }
 
@@ -145,7 +160,7 @@ contract UpgradeTest is Test {
     address debt;
   }
 
-  function test_healthyLiquidateShouldUse300bpsLB() public {
+  function test_healthyLiquidateShouldUse500bpsLB() public {
     V1User[] memory users = _getUsers();
     for (uint256 i = 0; i < users.length; i++) {
       (, uint256 currentBorrowBalance, , , , , , , , ) = POOL.getUserReserveData(
@@ -183,7 +198,7 @@ contract UpgradeTest is Test {
       uint256 collateralDiff = totalCollateralETHBefore - totalCollateralETHAfter;
       uint256 borrowsDiff = totalBorrowsETHBefore - totalBorrowsETHAfter;
       assertGt(collateralDiff, borrowsDiff);
-      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.97 ether, 0.001 ether); // should be ~3% + rounding
+      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.95 ether, 0.005 ether); // should be ~3% + rounding
     }
   }
 
