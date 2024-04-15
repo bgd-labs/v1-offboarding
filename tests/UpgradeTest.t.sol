@@ -45,6 +45,27 @@ interface ILendingPool {
       uint256 healthFactor
     );
 
+  function getReserveData(
+    address _reserve
+  )
+    external
+    view
+    returns (
+      uint256 totalLiquidity,
+      uint256 availableLiquidity,
+      uint256 totalBorrowsStable,
+      uint256 totalBorrowsVariable,
+      uint256 liquidityRate,
+      uint256 variableBorrowRate,
+      uint256 stableBorrowRate,
+      uint256 averageStableBorrowRate,
+      uint256 utilizationRate,
+      uint256 liquidityIndex,
+      uint256 variableBorrowIndex,
+      address aTokenAddress,
+      uint40 lastUpdateTimestamp
+    );
+
   function getUserReserveData(
     address _reserve,
     address _user
@@ -94,6 +115,16 @@ interface ILendingPoolCore {
   function getReserveInterestRateStrategyAddress(address) external view returns (address);
 
   function getReserveATokenAddress(address) external view returns (address);
+
+  function getReserveLiquidityCumulativeIndex(address) external view returns (uint256);
+
+  function getReserveVariableBorrowsCumulativeIndex(address) external view returns (uint256);
+
+  function getReserveCurrentLiquidityRate(address) external view returns (uint256);
+
+  function getReserveCurrentVariableBorrowRate(address) external view returns (uint256);
+
+  function getReserveCurrentStableBorrowRate(address) external view returns (uint256);
 }
 
 interface IEarnRebalance {
@@ -112,8 +143,10 @@ contract UpgradeTest is Test {
 
   function setUp() public {
     vm.createSelectFork(vm.rpcUrl('mainnet'), 19574504);
-    vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
+  }
 
+  function _executeUpgrade() internal {
+    vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
     bytes memory liquidationManagerBytecode = abi.encodePacked(
       vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
     );
@@ -161,6 +194,7 @@ contract UpgradeTest is Test {
   }
 
   function test_healthyLiquidateShouldUse500bpsLB() public {
+    _executeUpgrade();
     V1User[] memory users = _getUsers();
     for (uint256 i = 0; i < users.length; i++) {
       (, uint256 currentBorrowBalance, , , , , , , , ) = POOL.getUserReserveData(
@@ -198,11 +232,13 @@ contract UpgradeTest is Test {
       uint256 collateralDiff = totalCollateralETHBefore - totalCollateralETHAfter;
       uint256 borrowsDiff = totalBorrowsETHBefore - totalBorrowsETHAfter;
       assertGt(collateralDiff, borrowsDiff);
-      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.95 ether, 0.005 ether); // should be ~3% + rounding
+      assertApproxEqAbs((borrowsDiff * 1 ether) / collateralDiff, 0.97 ether, 0.005 ether); // should be ~3% + rounding
     }
   }
 
   function test_repay() public {
+    _executeUpgrade();
+
     V1User[] memory users = _getUsers();
     for (uint256 i = 0; i < users.length; i++) {
       vm.startPrank(users[i].user);
@@ -215,6 +251,8 @@ contract UpgradeTest is Test {
   }
 
   function test_redeem() public {
+    _executeUpgrade();
+
     V1User[] memory users = _getUsers();
 
     for (uint256 i = 0; i < users.length; i++) {
@@ -227,7 +265,26 @@ contract UpgradeTest is Test {
     }
   }
 
+  function test_rates() public {
+    address[] memory reserves = CORE.getReserves();
+    uint256 snapshot = vm.snapshot();
+    for (uint256 i = 0; i < reserves.length; i++) {
+      uint256 lIndexBefore = CORE.getReserveLiquidityCumulativeIndex(reserves[i]);
+      uint256 vIndexBefore = CORE.getReserveVariableBorrowsCumulativeIndex(reserves[i]);
+      _executeUpgrade();
+      uint256 lIndexAfter = CORE.getReserveLiquidityCumulativeIndex(reserves[i]);
+      uint256 vIndexAfter = CORE.getReserveVariableBorrowsCumulativeIndex(reserves[i]);
+      uint256 liquidityRateAfter = CORE.getReserveCurrentLiquidityRate(reserves[i]);
+
+      assertEq(lIndexBefore, lIndexAfter);
+      assertEq(vIndexBefore, vIndexAfter);
+      assertEq(liquidityRateAfter, 0);
+      vm.revertTo(snapshot);
+    }
+  }
+
   function test_rebalanceUSDC() public {
+    _executeUpgrade();
     IEarnRebalance(0xd6aD7a6750A7593E092a9B218d66C0A814a3436e).rebalance();
   }
 
@@ -236,10 +293,12 @@ contract UpgradeTest is Test {
   // }
 
   function test_rebalanceDAI() public {
+    _executeUpgrade();
     IEarnRebalance(0x16de59092dAE5CcF4A1E6439D611fd0653f0Bd01).rebalance();
   }
 
   function test_rebalanceLINK() public {
+    _executeUpgrade();
     IEarnRebalance(0x29E240CFD7946BA20895a7a02eDb25C210f9f324).rebalance();
   }
 
