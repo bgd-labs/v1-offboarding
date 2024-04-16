@@ -3488,20 +3488,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     onlyUnfreezedReserve(_reserve)
     onlyAmountGreaterThanZero(_amount)
   {
-    AToken aToken = AToken(core.getReserveATokenAddress(_reserve));
-
-    bool isFirstDeposit = aToken.balanceOf(msg.sender) == 0;
-
-    core.updateStateOnDeposit(_reserve, msg.sender, _amount, isFirstDeposit);
-
-    //minting AToken to user 1:1 with the specific exchange rate
-    aToken.mintOnDeposit(msg.sender, _amount);
-
-    //transfer to the core contract
-    core.transferToReserve.value(msg.value)(_reserve, msg.sender, _amount);
-
-    //solium-disable-next-line
-    emit Deposit(_reserve, msg.sender, _amount, _referralCode, block.timestamp);
+    require(false, 'METHOD_DISABLED');
   }
 
   /**
@@ -3579,117 +3566,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     onlyUnfreezedReserve(_reserve)
     onlyAmountGreaterThanZero(_amount)
   {
-    // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
-    BorrowLocalVars memory vars;
-
-    //check that the reserve is enabled for borrowing
-    require(core.isReserveBorrowingEnabled(_reserve), 'Reserve is not enabled for borrowing');
-    //validate interest rate mode
-    require(
-      uint256(CoreLibrary.InterestRateMode.VARIABLE) == _interestRateMode ||
-        uint256(CoreLibrary.InterestRateMode.STABLE) == _interestRateMode,
-      'Invalid interest rate mode selected'
-    );
-
-    //cast the rateMode to coreLibrary.interestRateMode
-    vars.rateMode = CoreLibrary.InterestRateMode(_interestRateMode);
-
-    //check that the amount is available in the reserve
-    vars.availableLiquidity = core.getReserveAvailableLiquidity(_reserve);
-
-    require(
-      vars.availableLiquidity >= _amount,
-      'There is not enough liquidity available in the reserve'
-    );
-
-    (
-      ,
-      vars.userCollateralBalanceETH,
-      vars.userBorrowBalanceETH,
-      vars.userTotalFeesETH,
-      vars.currentLtv,
-      vars.currentLiquidationThreshold,
-      ,
-      vars.healthFactorBelowThreshold
-    ) = dataProvider.calculateUserGlobalData(msg.sender);
-
-    require(vars.userCollateralBalanceETH > 0, 'The collateral balance is 0');
-
-    require(
-      !vars.healthFactorBelowThreshold,
-      'The borrower can already be liquidated so he cannot borrow more'
-    );
-
-    //calculating fees
-    vars.borrowFee = feeProvider.calculateLoanOriginationFee(msg.sender, _amount);
-
-    require(vars.borrowFee > 0, 'The amount to borrow is too small');
-
-    vars.amountOfCollateralNeededETH = dataProvider.calculateCollateralNeededInETH(
-      _reserve,
-      _amount,
-      vars.borrowFee,
-      vars.userBorrowBalanceETH,
-      vars.userTotalFeesETH,
-      vars.currentLtv
-    );
-
-    require(
-      vars.amountOfCollateralNeededETH <= vars.userCollateralBalanceETH,
-      'There is not enough collateral to cover a new borrow'
-    );
-
-    /**
-     * Following conditions need to be met if the user is borrowing at a stable rate:
-     * 1. Reserve must be enabled for stable rate borrowing
-     * 2. Users cannot borrow from the reserve if their collateral is (mostly) the same currency
-     *    they are borrowing, to prevent abuses.
-     * 3. Users will be able to borrow only a relatively small, configurable amount of the total
-     *    liquidity
-     **/
-
-    if (vars.rateMode == CoreLibrary.InterestRateMode.STABLE) {
-      //check if the borrow mode is stable and if stable rate borrowing is enabled on this reserve
-      require(
-        core.isUserAllowedToBorrowAtStable(_reserve, msg.sender, _amount),
-        'User cannot borrow the selected amount with a stable rate'
-      );
-
-      //calculate the max available loan size in stable rate mode as a percentage of the
-      //available liquidity
-      uint256 maxLoanPercent = parametersProvider.getMaxStableRateBorrowSizePercent();
-      uint256 maxLoanSizeStable = vars.availableLiquidity.mul(maxLoanPercent).div(100);
-
-      require(
-        _amount <= maxLoanSizeStable,
-        'User is trying to borrow too much liquidity at a stable rate'
-      );
-    }
-
-    //all conditions passed - borrow is accepted
-    (vars.finalUserBorrowRate, vars.borrowBalanceIncrease) = core.updateStateOnBorrow(
-      _reserve,
-      msg.sender,
-      _amount,
-      vars.borrowFee,
-      vars.rateMode
-    );
-
-    //if we reached this point, we can transfer
-    core.transferToUser(_reserve, msg.sender, _amount);
-
-    emit Borrow(
-      _reserve,
-      msg.sender,
-      _amount,
-      _interestRateMode,
-      vars.finalUserBorrowRate,
-      vars.borrowFee,
-      vars.borrowBalanceIncrease,
-      _referralCode,
-      //solium-disable-next-line
-      block.timestamp
-    );
+    require(false, 'METHOD_DISABLED');
   }
 
   /**
@@ -3825,51 +3702,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
   function swapBorrowRateMode(
     address _reserve
   ) external nonReentrant onlyActiveReserve(_reserve) onlyUnfreezedReserve(_reserve) {
-    (
-      uint256 principalBorrowBalance,
-      uint256 compoundedBorrowBalance,
-      uint256 borrowBalanceIncrease
-    ) = core.getUserBorrowBalances(_reserve, msg.sender);
-
-    require(compoundedBorrowBalance > 0, 'User does not have a borrow in progress on this reserve');
-
-    CoreLibrary.InterestRateMode currentRateMode = core.getUserCurrentBorrowRateMode(
-      _reserve,
-      msg.sender
-    );
-
-    if (currentRateMode == CoreLibrary.InterestRateMode.VARIABLE) {
-      /**
-       * user wants to swap to stable, before swapping we need to ensure that
-       * 1. stable borrow rate is enabled on the reserve
-       * 2. user is not trying to abuse the reserve by depositing
-       * more collateral than he is borrowing, artificially lowering
-       * the interest rate, borrowing at variable, and switching to stable
-       **/
-      require(
-        core.isUserAllowedToBorrowAtStable(_reserve, msg.sender, compoundedBorrowBalance),
-        'User cannot borrow the selected amount at stable'
-      );
-    }
-
-    (CoreLibrary.InterestRateMode newRateMode, uint256 newBorrowRate) = core.updateStateOnSwapRate(
-      _reserve,
-      msg.sender,
-      principalBorrowBalance,
-      compoundedBorrowBalance,
-      borrowBalanceIncrease,
-      currentRateMode
-    );
-
-    emit Swap(
-      _reserve,
-      msg.sender,
-      uint256(newRateMode),
-      newBorrowRate,
-      borrowBalanceIncrease,
-      //solium-disable-next-line
-      block.timestamp
-    );
+    require(false, 'METHOD_DISABLED');
   }
 
   /**
@@ -3883,44 +3716,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     address _reserve,
     address _user
   ) external nonReentrant onlyActiveReserve(_reserve) {
-    (uint256 principalBalance, uint256 compoundedBalance, uint256 borrowBalanceIncrease) = core
-      .getUserBorrowBalances(_reserve, _user);
-
-    require(compoundedBalance > 0, 'User does not have any borrow for this reserve');
-
-    CoreLibrary.InterestRateMode rateMode = core.getUserCurrentBorrowRateMode(_reserve, _user);
-    require(
-      rateMode == CoreLibrary.InterestRateMode.STABLE,
-      'The user borrow is variable and cannot be rebalanced'
-    );
-
-    uint256 userCurrentStableRate = core.getUserCurrentStableBorrowRate(_reserve, _user);
-    uint256 liquidityRate = core.getReserveCurrentLiquidityRate(_reserve);
-    if (userCurrentStableRate < liquidityRate) {
-      (CoreLibrary.InterestRateMode newRateMode, uint256 newBorrowRate) = core
-        .updateStateOnSwapRate(
-          _reserve,
-          _user,
-          principalBalance,
-          compoundedBalance,
-          borrowBalanceIncrease,
-          rateMode
-        );
-
-      emit Swap(
-        _reserve,
-        _user,
-        uint256(newRateMode),
-        newBorrowRate,
-        borrowBalanceIncrease,
-        //solium-disable-next-line
-        block.timestamp
-      );
-
-      return;
-    }
-
-    revert('Interest rate rebalance conditions were not met');
+    require(false, 'METHOD_DISABLED');
   }
 
   /**
@@ -3932,22 +3728,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     address _reserve,
     bool _useAsCollateral
   ) external nonReentrant onlyActiveReserve(_reserve) onlyUnfreezedReserve(_reserve) {
-    uint256 underlyingBalance = core.getUserUnderlyingAssetBalance(_reserve, msg.sender);
-
-    require(underlyingBalance > 0, 'User does not have any liquidity deposited');
-
-    require(
-      dataProvider.balanceDecreaseAllowed(_reserve, msg.sender, underlyingBalance),
-      'User deposit is already being used as collateral'
-    );
-
-    core.setUserUseReserveAsCollateral(_reserve, msg.sender, _useAsCollateral);
-
-    if (_useAsCollateral) {
-      emit ReserveUsedAsCollateralEnabled(_reserve, msg.sender);
-    } else {
-      emit ReserveUsedAsCollateralDisabled(_reserve, msg.sender);
-    }
+    require(false, 'METHOD_DISABLED');
   }
 
   /**
@@ -4005,56 +3786,7 @@ contract LendingPool is ReentrancyGuard, VersionedInitializable {
     uint256 _amount,
     bytes memory _params
   ) public nonReentrant onlyActiveReserve(_reserve) onlyAmountGreaterThanZero(_amount) {
-    require(false, 'V1 flashloans are disabled');
-    //check that the reserve has enough available liquidity
-    //we avoid using the getAvailableLiquidity() function in LendingPoolCore to save gas
-    uint256 availableLiquidityBefore = _reserve == EthAddressLib.ethAddress()
-      ? address(core).balance
-      : IERC20(_reserve).balanceOf(address(core));
-
-    require(
-      availableLiquidityBefore >= _amount,
-      'There is not enough liquidity available to borrow'
-    );
-
-    (uint256 totalFeeBips, uint256 protocolFeeBips) = parametersProvider.getFlashLoanFeesInBips();
-    //calculate amount fee
-    uint256 amountFee = _amount.mul(totalFeeBips).div(10000);
-
-    //protocol fee is the part of the amountFee reserved for the protocol - the rest goes to depositors
-    uint256 protocolFee = amountFee.mul(protocolFeeBips).div(10000);
-    require(amountFee > 0 && protocolFee > 0, 'The requested amount is too small for a flashLoan.');
-
-    //get the FlashLoanReceiver instance
-    IFlashLoanReceiver receiver = IFlashLoanReceiver(_receiver);
-
-    address payable userPayable = address(uint160(_receiver));
-
-    //transfer funds to the receiver
-    core.transferToUser(_reserve, userPayable, _amount);
-
-    //execute action of the receiver
-    receiver.executeOperation(_reserve, _amount, amountFee, _params);
-
-    //check that the actual balance of the core contract includes the returned amount
-    uint256 availableLiquidityAfter = _reserve == EthAddressLib.ethAddress()
-      ? address(core).balance
-      : IERC20(_reserve).balanceOf(address(core));
-
-    require(
-      availableLiquidityAfter == availableLiquidityBefore.add(amountFee),
-      'The actual balance of the protocol is inconsistent'
-    );
-
-    core.updateStateOnFlashLoan(
-      _reserve,
-      availableLiquidityBefore,
-      amountFee.sub(protocolFee),
-      protocolFee
-    );
-
-    //solium-disable-next-line
-    emit FlashLoan(_receiver, _reserve, _amount, amountFee, protocolFee, block.timestamp);
+    require(false, 'METHOD_DISABLED');
   }
 
   function rescueTokens(
