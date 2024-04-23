@@ -1,6 +1,6 @@
 # V1 Deprecation PART3
 
-This repository contains the upgraded `Pool` contract required for the V1 Deprecation PHASE 3 as described on [the forum](https://governance.aave.com/t/temp-check-bgd-further-aave-v1-deprecation-strategy/15893/5).
+This repository contains the upgraded `Pool` contract required for the V1 Deprecation PHASE 3 as described on [the forum](https://governance.aave.com/t/temp-check-bgd-further-aave-v1-deprecation-strategy/15893/7).
 
 The `Pool` is upgraded in order to prevent any action on the pool.
 This is done, so a merkle distribution can happen with accurate values for each user.
