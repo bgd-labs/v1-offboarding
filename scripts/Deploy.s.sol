@@ -13,22 +13,36 @@ contract Deploy is Script {
 
   function run() external {
     vm.startBroadcast();
+    // deploy zero IR
     bytes memory irBytecode = abi.encodePacked(
       vm.getCode(
         'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
       ),
-      abi.encode(
-        address(ADDRESSES_PROVIDER),
-        0,
-        0, // 1%
-        0, // 5%
-        0, // 2%
-        0 // 10%
-      )
+      abi.encode(address(ADDRESSES_PROVIDER), 0, 0, 0, 0, 0)
     );
     address ir;
     assembly {
       ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
+    }
+    // deploy LiquidationManager
+    bytes memory liquidationManagerBytecode = abi.encodePacked(
+      vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
+    );
+    address liquidationManager;
+    assembly {
+      liquidationManager := create(
+        0,
+        add(liquidationManagerBytecode, 0x20),
+        mload(liquidationManagerBytecode)
+      )
+    }
+    // deploy new core
+    bytes memory coreBytecode = abi.encodePacked(
+      vm.getCode('UpdatedLendingPool.sol:LendingPoolCore')
+    );
+    address core;
+    assembly {
+      core := create(0, add(coreBytecode, 0x20), mload(coreBytecode))
     }
     vm.stopBroadcast();
   }
