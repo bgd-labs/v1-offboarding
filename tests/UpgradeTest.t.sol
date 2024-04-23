@@ -6,6 +6,7 @@ import {AaveV2EthereumAssets} from 'aave-address-book/AaveV2Ethereum.sol';
 import {GovernanceV3Ethereum} from 'aave-address-book/GovernanceV3Ethereum.sol';
 import {IERC20} from 'solidity-utils/contracts/oz-common/interfaces/IERC20.sol';
 import {SafeERC20} from 'solidity-utils/contracts/oz-common/SafeERC20.sol';
+import {DeployLib} from '../scripts/Deploy.s.sol';
 
 interface IAToken {
   function redeem(uint256 _amount) external;
@@ -146,35 +147,9 @@ contract UpgradeTest is Test {
   }
 
   function _executeUpgrade() internal {
+    (address liquidationManager, address ir, address core, address pool) = DeployLib._deploy(vm);
+
     vm.startPrank(GovernanceV3Ethereum.EXECUTOR_LVL_1);
-    bytes memory liquidationManagerBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPoolLiquidationManager.sol:LendingPoolLiquidationManager')
-    );
-    address liquidationManager;
-    assembly {
-      liquidationManager := create(
-        0,
-        add(liquidationManagerBytecode, 0x20),
-        mload(liquidationManagerBytecode)
-      )
-    }
-
-    bytes memory irBytecode = abi.encodePacked(
-      vm.getCode(
-        'UpdatedCollateralReserveInterestRateStrategy.sol:CollateralReserveInterestRateStrategy'
-      ),
-      abi.encode(address(ADDRESSES_PROVIDER), 0, 0, 0, 0, 0)
-    );
-    bytes memory coreBytecode = abi.encodePacked(
-      vm.getCode('UpdatedLendingPool.sol:LendingPoolCore')
-    );
-    address ir;
-    address core;
-    assembly {
-      ir := create(0, add(irBytecode, 0x20), mload(irBytecode))
-      core := create(0, add(coreBytecode, 0x20), mload(coreBytecode))
-    }
-
     // 1. update core to update irs one last time
     ADDRESSES_PROVIDER.setLendingPoolCoreImpl(core);
     // 2. update irs to be zero & deactivate reserve
@@ -184,6 +159,7 @@ contract UpgradeTest is Test {
     }
     // 3. upgrade liquidationManager
     ADDRESSES_PROVIDER.setLendingPoolLiquidationManager(liquidationManager);
+    ADDRESSES_PROVIDER.setLendingPoolImpl(pool);
     vm.stopPrank();
   }
 
