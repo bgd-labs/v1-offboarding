@@ -5870,7 +5870,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
   IFeeProvider feeProvider;
   address ethereumAddress;
 
-  uint256 constant OFFBOARDING_LIQUIDATION_BONUS = 103; // 1%
+  uint256 constant OFFBOARDING_LIQUIDATION_BONUS = 105; // 5%
 
   /**
    * @dev emitted when a borrow fee is liquidated
@@ -5970,8 +5970,6 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
     // Usage of a memory struct of vars to avoid "Stack too deep" errors due to local variables
     LiquidationCallLocalVars memory vars;
 
-    (, , , , , , , vars.healthFactorBelowThreshold) = dataProvider.calculateUserGlobalData(_user);
-
     vars.userCollateralBalance = core.getUserUnderlyingAssetBalance(_collateral, _user);
 
     //if _user hasn't deposited this specific collateral, nothing can be liquidated
@@ -6014,15 +6012,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
       ? vars.maxPrincipalAmountToLiquidate
       : _purchaseAmount;
 
-    (uint256 maxCollateralToLiquidate, uint256 principalAmountNeeded) = !vars
-      .healthFactorBelowThreshold
-      ? offboardingCalculateAvailableCollateralToLiquidate(
-        _collateral,
-        _reserve,
-        vars.actualAmountToLiquidate,
-        vars.userCollateralBalance
-      )
-      : calculateAvailableCollateralToLiquidate(
+    (uint256 maxCollateralToLiquidate, uint256 principalAmountNeeded) = offboardingCalculateAvailableCollateralToLiquidate(
         _collateral,
         _reserve,
         vars.actualAmountToLiquidate,
@@ -6033,14 +6023,7 @@ contract LendingPoolLiquidationManager is ReentrancyGuard, VersionedInitializabl
 
     //if there is a fee to liquidate, calculate the maximum amount of fee that can be liquidated
     if (vars.originationFee > 0) {
-      (vars.liquidatedCollateralForFee, vars.feeLiquidated) = !vars.healthFactorBelowThreshold
-        ? offboardingCalculateAvailableCollateralToLiquidate(
-          _collateral,
-          _reserve,
-          vars.originationFee,
-          vars.userCollateralBalance.sub(maxCollateralToLiquidate)
-        )
-        : calculateAvailableCollateralToLiquidate(
+      (vars.liquidatedCollateralForFee, vars.feeLiquidated) = offboardingCalculateAvailableCollateralToLiquidate(
           _collateral,
           _reserve,
           vars.originationFee,

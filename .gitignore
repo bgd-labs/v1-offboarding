@@ -18,3 +18,6 @@ broadcast/
 
 # download folder for local diffing
 etherscan
+
+# MAC
+.DS_Store

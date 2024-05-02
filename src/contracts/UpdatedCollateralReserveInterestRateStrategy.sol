@@ -6496,14 +6496,6 @@ contract CollateralReserveInterestRateStrategy is DoubleSlopeInterestRateStrateg
       uint256 currentVariableBorrowRate
     )
   {
-    return
-      super.calculateInterestRatesInternal(
-        _reserve,
-        _availableLiquidity,
-        _totalBorrowsStable,
-        _totalBorrowsVariable,
-        _averageStableBorrowRate,
-        OPTIMAL_UTILIZATION_RATE
-      );
+    return (0,0,0);
   }
 }
